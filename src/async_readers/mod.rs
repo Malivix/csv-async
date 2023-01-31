@@ -1708,7 +1708,7 @@ where
                 Poll::Pending => Poll::Pending,
             }
         } else if let Some(rec_fut) = &mut self.rec_fut {
-            match self.rec_fut.as_mut().poll(cx) {
+            match rec_fut.as_mut().poll(cx) {
                 Poll::Ready((result, rdr, headers, rec)) => {
                     if result.is_some() {
                         self.rec_fut = Some(Pin::from(Box::new(
