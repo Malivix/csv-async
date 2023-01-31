@@ -12,15 +12,15 @@ if #[cfg(feature = "tokio")] {
     use futures::stream::Stream;
 }}
 
-use csv_core::{ReaderBuilder as CoreReaderBuilder};
-use csv_core::{Reader as CoreReader};
+use csv_core::Reader as CoreReader;
+use csv_core::ReaderBuilder as CoreReaderBuilder;
 #[cfg(feature = "with_serde")]
 use serde::de::DeserializeOwned;
 
-use crate::{Terminator, Trim};
 use crate::byte_record::{ByteRecord, Position};
 use crate::error::{Error, ErrorKind, Result, Utf8Error};
 use crate::string_record::StringRecord;
+use crate::{Terminator, Trim};
 
 cfg_if::cfg_if! {
 if #[cfg(feature = "tokio")] {
@@ -137,7 +137,7 @@ impl AsyncReaderBuilder {
     ///     assert_eq!(records, vec![
     ///         vec!["Boston", "United States", "4628910"],
     ///     ]);
-     /// }
+    /// }
     /// ```
     pub fn delimiter(&mut self, delimiter: u8) -> &mut AsyncReaderBuilder {
         self.builder.delimiter(delimiter);
@@ -278,7 +278,7 @@ impl AsyncReaderBuilder {
     /// Otherwise CSV reader will continue trying to read from underlying reader.
     /// For sample, please see unit test `behavior_on_io_errors` in following
     /// [source file](https://github.com/gwierzchowski/csv-async/blob/master/src/async_readers/ardr_futures.rs).
-    /// 
+    ///
     /// By default this option is set.
     pub fn end_on_io_error(&mut self, yes: bool) -> &mut AsyncReaderBuilder {
         self.end_on_io_error = yes;
@@ -673,7 +673,7 @@ impl ReaderState {
     }
 }
 /// CSV async reader internal implementation used by both record reader and deserializer.
-/// 
+///
 #[derive(Debug)]
 pub struct AsyncReaderImpl<R> {
     /// The underlying CSV parser.
@@ -705,16 +705,14 @@ impl<'a, R: AsyncBufRead + ?Sized + Unpin> FillBuf<'a, R> {
 
 impl<R: AsyncBufRead + ?Sized + Unpin> Future for FillBuf<'_, R> {
     type Output = io::Result<usize>;
-    
+
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match Pin::new(&mut *self.reader).poll_fill_buf(cx) {
-            Poll::Ready(res) => {
-                match res {
-                    Ok(res) => Poll::Ready(Ok(res.len())),
-                    Err(e) => Poll::Ready(Err(e))
-                }
+            Poll::Ready(res) => match res {
+                Ok(res) => Poll::Ready(Ok(res.len())),
+                Err(e) => Poll::Ready(Err(e)),
             },
-            Poll::Pending => Poll::Pending
+            Poll::Pending => Poll::Pending,
         }
     }
 }
@@ -785,10 +783,7 @@ where
         self.set_headers_impl(Err(headers));
     }
 
-    fn set_headers_impl(
-        &mut self,
-        headers: result::Result<StringRecord, ByteRecord>,
-    ) {
+    fn set_headers_impl(&mut self, headers: result::Result<StringRecord, ByteRecord>) {
         // If we have string headers, then get byte headers. But if we have
         // byte headers, then get the string headers (or a UTF-8 error).
         let (mut str_headers, mut byte_headers) = match headers {
@@ -796,12 +791,10 @@ where
                 let bytes = string.clone().into_byte_record();
                 (Ok(string), bytes)
             }
-            Err(bytes) => {
-                match StringRecord::from_byte_record(bytes.clone()) {
-                    Ok(str_headers) => (Ok(str_headers), bytes),
-                    Err(err) => (Err(err.utf8_error().clone()), bytes),
-                }
-            }
+            Err(bytes) => match StringRecord::from_byte_record(bytes.clone()) {
+                Ok(str_headers) => (Ok(str_headers), bytes),
+                Err(err) => (Err(err.utf8_error().clone()), bytes),
+            },
         };
         if self.state.trim.should_trim_headers() {
             if let Ok(ref mut str_headers) = str_headers.as_mut() {
@@ -830,10 +823,7 @@ where
 
     /// Read a single row into the given byte record. Returns false when no
     /// more records could be read.
-    pub async fn read_byte_record(
-        &mut self,
-        record: &mut ByteRecord,
-    ) -> Result<bool> {
+    pub async fn read_byte_record(&mut self, record: &mut ByteRecord) -> Result<bool> {
         if !self.state.seeked && !self.state.has_headers && !self.state.first {
             // If the caller indicated "no headers" and we haven't yielded the
             // first record yet, then we should yield our header row if we have
@@ -870,10 +860,7 @@ where
     /// Read a byte record from the underlying CSV reader, without accounting
     /// for headers.
     #[inline(always)]
-    async fn read_byte_record_impl(
-        &mut self,
-        record: &mut ByteRecord,
-    ) -> Result<bool> {
+    async fn read_byte_record_impl(&mut self, record: &mut ByteRecord) -> Result<bool> {
         use csv_core::ReadRecordResult::*;
 
         record.clear();
@@ -881,8 +868,10 @@ where
         match self.state.eof {
             ReaderEofState::Eof => return Ok(false),
             ReaderEofState::IOError => {
-                if self.state.end_on_io_error { return Ok(false) }
-            },
+                if self.state.end_on_io_error {
+                    return Ok(false);
+                }
+            }
             ReaderEofState::NotEof => {}
         }
         let (mut outlen, mut endlen) = (0, 0);
@@ -987,11 +976,7 @@ impl<R: io::AsyncRead + io::AsyncSeek + Unpin> AsyncReaderImpl<R> {
 
     /// This is like `seek`, but provides direct control over how the seeking
     /// operation is performed via `io::SeekFrom`.
-    pub async fn seek_raw(
-        &mut self,
-        seek_from: io::SeekFrom,
-        pos: Position,
-    ) -> Result<()> {
+    pub async fn seek_raw(&mut self, seek_from: io::SeekFrom, pos: Position) -> Result<()> {
         self.byte_headers().await?;
         self.state.seeked = true;
         self.rdr.seek(seek_from).await?;
@@ -1038,16 +1023,19 @@ impl<R: io::AsyncRead + io::AsyncSeek + Unpin> AsyncReaderImpl<R> {
     }
 }
 
-
 //-//////////////////////////////////////////////////////////////////////////////////////////////
 //-//////////////////////////////////////////////////////////////////////////////////////////////
 
 async fn read_record_borrowed<'r, R>(
     rdr: &'r mut AsyncReaderImpl<R>,
     mut rec: StringRecord,
-) -> (Option<Result<StringRecord>>, &'r mut AsyncReaderImpl<R>, StringRecord)
+) -> (
+    Option<Result<StringRecord>>,
+    &'r mut AsyncReaderImpl<R>,
+    StringRecord,
+)
 where
-    R: io::AsyncRead + Unpin
+    R: io::AsyncRead + Unpin,
 {
     let result = match rdr.read_record(&mut rec).await {
         Err(err) => Some(Err(err)),
@@ -1064,7 +1052,7 @@ where
 /// CSV `Reader`.
 pub struct StringRecordsStream<'r, R>
 where
-    R: io::AsyncRead + Unpin + Send
+    R: io::AsyncRead + Unpin + Send,
 {
     fut: Option<
         Pin<
@@ -1075,7 +1063,8 @@ where
                             &'r mut AsyncReaderImpl<R>,
                             StringRecord,
                         ),
-                    > + Send + 'r,
+                    > + Send
+                    + 'r,
             >,
         >,
     >,
@@ -1083,7 +1072,7 @@ where
 
 impl<'r, R> StringRecordsStream<'r, R>
 where
-    R: io::AsyncRead + Unpin + Send
+    R: io::AsyncRead + Unpin + Send,
 {
     fn new(rdr: &'r mut AsyncReaderImpl<R>) -> Self {
         Self {
@@ -1097,20 +1086,15 @@ where
 
 impl<'r, R> Stream for StringRecordsStream<'r, R>
 where
-    R: io::AsyncRead + Unpin + Send
+    R: io::AsyncRead + Unpin + Send,
 {
     type Item = Result<StringRecord>;
 
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context,
-    ) -> Poll<Option<Self::Item>> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         match self.fut.as_mut().unwrap().as_mut().poll(cx) {
             Poll::Ready((result, rdr, rec)) => {
                 if result.is_some() {
-                    self.fut = Some(Pin::from(Box::new(
-                        read_record_borrowed(rdr, rec),
-                    )));
+                    self.fut = Some(Pin::from(Box::new(read_record_borrowed(rdr, rec))));
                 } else {
                     self.fut = None;
                 }
@@ -1128,9 +1112,13 @@ where
 async fn read_record<R>(
     mut rdr: AsyncReaderImpl<R>,
     mut rec: StringRecord,
-) -> (Option<Result<StringRecord>>, AsyncReaderImpl<R>, StringRecord)
+) -> (
+    Option<Result<StringRecord>>,
+    AsyncReaderImpl<R>,
+    StringRecord,
+)
 where
-    R: io::AsyncRead + Unpin
+    R: io::AsyncRead + Unpin,
 {
     let result = match rdr.read_record(&mut rec).await {
         Err(err) => Some(Err(err)),
@@ -1144,18 +1132,19 @@ where
 /// An owned stream of records as strings.
 pub struct StringRecordsIntoStream<'r, R>
 where
-    R: io::AsyncRead + Unpin + Send
+    R: io::AsyncRead + Unpin + Send,
 {
     fut: Option<
         Pin<
             Box<
                 dyn Future<
-                    Output = (
-                        Option<Result<StringRecord>>,
-                        AsyncReaderImpl<R>,
-                        StringRecord,
-                    ),
-                > + Send + 'r,
+                        Output = (
+                            Option<Result<StringRecord>>,
+                            AsyncReaderImpl<R>,
+                            StringRecord,
+                        ),
+                    > + Send
+                    + 'r,
             >,
         >,
     >,
@@ -1163,33 +1152,26 @@ where
 
 impl<'r, R> StringRecordsIntoStream<'r, R>
 where
-    R: io::AsyncRead + Unpin + Send + 'r
+    R: io::AsyncRead + Unpin + Send + 'r,
 {
     fn new(rdr: AsyncReaderImpl<R>) -> Self {
         Self {
-            fut: Some(Pin::from(Box::new(read_record(
-                rdr,
-                StringRecord::new(),
-            )))),
+            fut: Some(Pin::from(Box::new(read_record(rdr, StringRecord::new())))),
         }
     }
 }
 
 impl<'r, R> Stream for StringRecordsIntoStream<'r, R>
 where
-    R: io::AsyncRead + Unpin + Send + 'r
+    R: io::AsyncRead + Unpin + Send + 'r,
 {
     type Item = Result<StringRecord>;
 
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context,
-    ) -> Poll<Option<Self::Item>> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         match self.fut.as_mut().unwrap().as_mut().poll(cx) {
             Poll::Ready((result, rdr, rec)) => {
                 if result.is_some() {
-                    self.fut =
-                        Some(Pin::from(Box::new(read_record(rdr, rec))));
+                    self.fut = Some(Pin::from(Box::new(read_record(rdr, rec))));
                 } else {
                     self.fut = None;
                 }
@@ -1207,7 +1189,11 @@ where
 async fn read_byte_record_borrowed<'r, R>(
     rdr: &'r mut AsyncReaderImpl<R>,
     mut rec: ByteRecord,
-) -> (Option<Result<ByteRecord>>, &'r mut AsyncReaderImpl<R>, ByteRecord)
+) -> (
+    Option<Result<ByteRecord>>,
+    &'r mut AsyncReaderImpl<R>,
+    ByteRecord,
+)
 where
     R: io::AsyncRead + Unpin,
 {
@@ -1237,7 +1223,8 @@ where
                             &'r mut AsyncReaderImpl<R>,
                             ByteRecord,
                         ),
-                    > + Send + 'r,
+                    > + Send
+                    + 'r,
             >,
         >,
     >,
@@ -1263,16 +1250,11 @@ where
 {
     type Item = Result<ByteRecord>;
 
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context,
-    ) -> Poll<Option<Self::Item>> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         match self.fut.as_mut().unwrap().as_mut().poll(cx) {
             Poll::Ready((result, rdr, rec)) => {
                 if result.is_some() {
-                    self.fut = Some(Pin::from(Box::new(
-                        read_byte_record_borrowed(rdr, rec),
-                    )));
+                    self.fut = Some(Pin::from(Box::new(read_byte_record_borrowed(rdr, rec))));
                 } else {
                     self.fut = None;
                 }
@@ -1292,7 +1274,7 @@ async fn read_byte_record<R>(
     mut rec: ByteRecord,
 ) -> (Option<Result<ByteRecord>>, AsyncReaderImpl<R>, ByteRecord)
 where
-    R: io::AsyncRead + Unpin
+    R: io::AsyncRead + Unpin,
 {
     let result = match rdr.read_byte_record(&mut rec).await {
         Err(err) => Some(Err(err)),
@@ -1306,18 +1288,14 @@ where
 /// An owned stream of records as raw bytes.
 pub struct ByteRecordsIntoStream<'r, R>
 where
-    R: io::AsyncRead + Unpin + Send
+    R: io::AsyncRead + Unpin + Send,
 {
     fut: Option<
         Pin<
             Box<
-                dyn Future<
-                    Output = (
-                        Option<Result<ByteRecord>>,
-                        AsyncReaderImpl<R>,
-                        ByteRecord,
-                    ),
-                > + Send + 'r,
+                dyn Future<Output = (Option<Result<ByteRecord>>, AsyncReaderImpl<R>, ByteRecord)>
+                    + Send
+                    + 'r,
             >,
         >,
     >,
@@ -1325,7 +1303,7 @@ where
 
 impl<'r, R> ByteRecordsIntoStream<'r, R>
 where
-    R: io::AsyncRead + Send + Unpin + 'r
+    R: io::AsyncRead + Send + Unpin + 'r,
 {
     fn new(rdr: AsyncReaderImpl<R>) -> Self {
         Self {
@@ -1339,19 +1317,15 @@ where
 
 impl<'r, R> Stream for ByteRecordsIntoStream<'r, R>
 where
-    R: io::AsyncRead + Send + Unpin + 'r
+    R: io::AsyncRead + Send + Unpin + 'r,
 {
     type Item = Result<ByteRecord>;
 
-    fn poll_next(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context,
-    ) -> Poll<Option<Self::Item>> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Option<Self::Item>> {
         match self.fut.as_mut().unwrap().as_mut().poll(cx) {
             Poll::Ready((result, rdr, rec)) => {
                 if result.is_some() {
-                    self.fut =
-                        Some(Pin::from(Box::new(read_byte_record(rdr, rec))));
+                    self.fut = Some(Pin::from(Box::new(read_byte_record(rdr, rec))));
                 } else {
                     self.fut = None;
                 }
@@ -1733,8 +1707,8 @@ where
                 },
                 Poll::Pending => Poll::Pending,
             }
-        } else {
-            match self.rec_fut.as_mut().unwrap().as_mut().poll(cx) {
+        } else if let Some(rec_fut) = &mut self.rec_fut {
+            match self.rec_fut.as_mut().poll(cx) {
                 Poll::Ready((result, rdr, headers, rec)) => {
                     if result.is_some() {
                         self.rec_fut = Some(Pin::from(Box::new(
@@ -1747,6 +1721,8 @@ where
                 }
                 Poll::Pending => Poll::Pending,
             }
+        } else {
+            Poll::Ready(None)
         }
     }
 }
@@ -1883,4 +1859,3 @@ where
 }
 
 }} // fi #[cfg(feature = "with_serde")]
-
